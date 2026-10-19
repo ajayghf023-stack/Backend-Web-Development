@@ -69,18 +69,9 @@ Server runs on `http://localhost:3000`.
 
 ---
 
-## Your task — implement `requireAuth`
+## `requireAuth` implementation
 
-Open `src/middleware/requireAuth.js`. It currently looks like this:
-
-```js
-// TODO: Implement requireAuth middleware.
-module.exports = function requireAuth(req, res, next) {
-  next(); // ← stub — remove this and implement properly
-};
-```
-
-Replace it with a proper implementation. Here is the contract your middleware must fulfill:
+The middleware in `src/middleware/requireAuth.js` enforces the following contract:
 
 ### Step 1 — Read the Authorization header
 
