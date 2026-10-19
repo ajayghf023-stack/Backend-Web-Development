@@ -15,8 +15,7 @@ app.post('/auth/login', (req, res) => {
 });
 
 // ─── Protected routes ─────────────────────────────────────────────────────────
-// TODO: requireAuth is applied here but currently does nothing.
-// Once you implement it, these routes will only respond to authenticated requests.
+// Protected routes only respond to authenticated requests.
 
 app.get('/profile', requireAuth, (req, res) => {
   return res.status(200).json({ userId: req.user.sub, message: 'Profile data' });
