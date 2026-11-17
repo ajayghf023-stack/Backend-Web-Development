@@ -1,16 +1,11 @@
-'use strict';
 
-// ─── GIVEN FILE — modify only to add caching (do not remove existing code) ───
-// This file sets up the Express app and two routes.
-// Your job: import cacheGet/cacheSet/cacheDel from ./cache and wire up:
-//   GET /feed  → cache-aside with 60s TTL and X-Cache header
-//   POST /posts → cacheDel after db.createPost()
+'use strict';
 
 require('dotenv').config();
 
 const express = require('express');
 const db      = require('./db');
-// TODO: import { cacheGet, cacheSet, cacheDel } from './cache'
+const { cacheGet, cacheSet, cacheDel } = require('./cache');
 
 const app = express();
 app.use(express.json());
@@ -20,28 +15,45 @@ const FEED_TTL = 60;   // seconds
 
 app.get('/health', (req, res) => res.json({ ok: true }));
 
-// GET /feed — currently queries the database on EVERY request (no caching).
-// TODO: wrap with cache-aside:
-//   1. cacheGet(FEED_KEY) → if hit, set X-Cache: HIT, log, return
-//   2. on miss: query db, cacheSet(FEED_KEY, posts, FEED_TTL), set X-Cache: MISS, log, return
+// GET /feed — cache-aside with 60-second TTL
 app.get('/feed', async (req, res) => {
+  const t0 = Date.now();
+
   try {
-    const t0 = Date.now();
+    // 1. Check Redis cache
+    const cachedPosts = await cacheGet(FEED_KEY);
+
+    if (cachedPosts !== null) {
+      res.set('X-Cache', 'HIT');
+      console.log(`[feed] HIT ${Date.now() - t0}ms`);
+      return res.json(cachedPosts);
+    }
+
+    // 2. Cache miss — query database
+    res.set('X-Cache', 'MISS');
     const posts = await db.getTrendingPosts();
-    console.log(`[feed] DB  ${Date.now() - t0}ms`);   // replace with HIT/MISS logging
-    res.json(posts);
+
+    // 3. Store results in Redis for 60 seconds
+    await cacheSet(FEED_KEY, posts, FEED_TTL);
+
+    // 4. Send response
+    console.log(`[feed] MISS ${Date.now() - t0}ms`);
+    return res.json(posts);
+
   } catch (err) {
     console.error('[feed] error:', err);
     res.status(500).json({ error: 'Internal server error' });
   }
 });
 
-// POST /posts — creates a new post.
-// TODO: call cacheDel(FEED_KEY) after db.createPost() to invalidate the stale cache.
+// POST /posts — creates a new post and invalidates feed cache
 app.post('/posts', async (req, res) => {
   try {
     const post = await db.createPost(req.body);
-    // TODO: await cacheDel(FEED_KEY);
+
+    // Invalidate stale feed cache
+    await cacheDel(FEED_KEY);
+
     res.status(201).json(post);
   } catch (err) {
     console.error('[posts] error:', err);
